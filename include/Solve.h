@@ -23,8 +23,26 @@
 #include "Solve.h"
 #include "Node.h"
 #include "Constants.h"
+#include <map>
 
 namespace TopUrl {
+    static const unsigned long long IOSIZE = 1024 * 1024 * 1024;//1G
+
+    struct HeapNode {
+        char *key;
+        int num;
+
+        HeapNode(const char *key, const int &num, const int &len) {
+            this->key = new char[len];
+            strcpy(this->key, key);
+            this->num = num;
+        }
+
+        ~HeapNode() {
+            //delete[] key;//vector delete
+        }
+    };
+
     class Solve {
         const int URLSIZE = 32;
         const int PAGESIZE = 4096;
@@ -42,10 +60,11 @@ namespace TopUrl {
         std::vector<std::string> fileNames;
 
         int getId(char *str, int length);
+
     public:
 
-        static const unsigned long long IOSIZE = 1024 * 1024 * 1024;//1G
-        Solve(const unsigned long long &fileSize, const int &topNum) ;
+
+        Solve(const unsigned long long &fileSize, const int &topNum);
 
         ~Solve();
 

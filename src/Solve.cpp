@@ -68,7 +68,7 @@ namespace TopUrl {
                     while (size + localSize < perFileSize && size < fileBufferSize) {
                         //get url
                         double time = get_time();
-                        int ptr = (int((time - int(time)) * 1e6)) % (topNum * 5);
+                        int ptr = (int((time - int(time)) * 1e6)) % (topNum);
                         if (ptr >= topNum) {
                             sprintf(url, "%lfnormal\n\0", time);
                             cur = url;
@@ -176,7 +176,6 @@ namespace TopUrl {
                         while (isDelimiter(buffer[pos])) {
                             pos++;
                             if (pos == bytes) {
-                                isTail = true;
                                 return;
                             }
                         }
@@ -196,7 +195,7 @@ namespace TopUrl {
                         if (urlLength) {
                             int id = getId(buffer + pos, urlLength);
                             if (pos != 0 && !isTail)//not head or tail
-                                local_grid_offset[id] += urlLength;
+                                local_grid_offset[id] += URLSIZE;//align
 
                             hashUrlNum.inc();
                             //std::cout << hashUrlNum.count() << " : " << buffer + pos << std::endl;
@@ -213,7 +212,7 @@ namespace TopUrl {
                     bool isHead = true;
                     for (pos = 0; pos < bytes; pos += urlLength) {
                         streamUrl();
-                        if (isHead) {
+                        if (isHead && buffer) {//no zero
                             //std::cout << tag << "/" << count << std::endl;
                             memcpy(head[tag].content, buffer + pos, urlLength);
                             head[tag].size = urlLength;
@@ -224,8 +223,9 @@ namespace TopUrl {
                             tail[tag].size = urlLength;
                         } else if (urlLength) {
                             int id = getId(buffer + pos, urlLength);
-                            memcpy(local_buffer + local_grid_cursor[id], buffer + pos, urlLength);
-                            local_grid_cursor[id] += urlLength;
+                            memcpy(local_buffer + local_grid_cursor[id], buffer + pos, URLSIZE);
+                            memset(local_buffer + local_grid_cursor[id] + urlLength, 0, URLSIZE - urlLength);//align
+                            local_grid_cursor[id] += URLSIZE;
                         }
                     }
                     //write file
@@ -299,13 +299,28 @@ namespace TopUrl {
         char htBuffer[URLSIZE];
         int tailLength, headLength;
         for (int i = 0; i < count - 1; ++i) {
+
             tailLength = tail[i].size;
             headLength = head[i + 1].size;
-            if (tailLength && headLength) {
-                memcpy(htBuffer, tail[i].content, tailLength);
-                memcpy(htBuffer + tail[i].size, head[i + 1].content, headLength);
-                int id = getId(htBuffer, headLength + tailLength);
-                write(fout[id], htBuffer, headLength + tailLength);
+
+            if (tailLength || headLength) {
+                if (tailLength + headLength > URLSIZE) {
+                    memcpy(htBuffer, tail[i].content, tailLength);
+                    memset(htBuffer + tailLength, 0, URLSIZE - tailLength);
+                    int id = getId(htBuffer, tailLength);
+                    write(fout[id], htBuffer, URLSIZE);
+
+                    memcpy(htBuffer, head[i + 1].content, headLength);
+                    memset(htBuffer + headLength, 0, URLSIZE - headLength);
+                    id = getId(htBuffer, headLength);
+                    write(fout[id], htBuffer, URLSIZE);
+                } else {
+                    memcpy(htBuffer, tail[i].content, tailLength);
+                    memcpy(htBuffer + tail[i].size, head[i + 1].content, headLength);
+                    memset(htBuffer + headLength + tailLength, 0, URLSIZE - headLength - tailLength);
+                    int id = getId(htBuffer, headLength + tailLength);
+                    write(fout[id], htBuffer, URLSIZE);
+                }
             }
         }
 
@@ -331,9 +346,54 @@ namespace TopUrl {
     }
 
     void Solve::streamHeap() {
+        auto bufferLength = IOSIZE / 5 * 2 / URLSIZE * URLSIZE;
+        char *buffer = new char[bufferLength];
+        auto cmpMap = [](char const *a, char const *b) {
+            return std::strcmp(a, b) < 0;
+        };
+        auto cmpHeap = [](const HeapNode &a, const HeapNode &b) {
+            return a.num > b.num;
+        };
+        std::priority_queue<HeapNode, std::vector<HeapNode>, decltype(cmpHeap)> heap(cmpHeap);
+        std::map<const char *, int, decltype(cmpMap)> map(cmpMap);//stack safe?
+
         for (const auto &fileName:fileNames) {
 
+
+            int fin = open(fileName.c_str(), O_RDONLY);
+            if (fin == -1) printf("%s\n", strerror(errno));
+            assert(fin != -1);
+
+            while (true) {
+                auto fileSize = file_size(fileName.c_str());
+                assert(fileSize < bufferLength);
+                long bytes = read(fin, buffer, fileSize);
+                assert(bytes != -1);
+                if (bytes == 0) break;
+                unsigned long long readBytes = 0;
+                while (readBytes < fileSize) {
+                    const char *key = buffer + readBytes;
+                    map[key]++;
+                    readBytes += URLSIZE;
+                }
+            }
+            for (const auto &item : map) {
+                heap.push(HeapNode(item.first, item.second, URLSIZE));
+                while (heap.size() > topNum) {
+                    heap.pop();
+                }
+            }
+            map.clear();
         }
+        int fans = open("ans.txt", O_WRONLY | O_CREAT, 0644);
+        while (!heap.empty()) {
+            auto node = heap.top();
+            write(fans, node.key, strlen(node.key));
+            write(fans, "\n", 1);
+            heap.pop();
+        }
+        close(fans);
+        std::cout<<"Get ans in ans.txt"<<std::endl;
     }
 
     void Solve::showRawAns() {
@@ -341,6 +401,7 @@ namespace TopUrl {
             std::cout << rawAns[i];
         }
     }
+
     int Solve::getId(char *str, int length) {
         uint32_t hash[4];                /* Output for the hash */
         uint32_t seed = 42;              /* Seed value for hash */
