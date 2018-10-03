@@ -44,19 +44,19 @@
 由于硬盘限制，没有进行100g的完整测试，最高只进行了10g的测试
 
 >dd if=/dev/zero of=text bs=71582788 count=151
-记录了151+0 的读入
-记录了151+0 的写出
-10809000988 bytes (11 GB, 10 GiB) copied, 27.0752 s, 399 MB/s
-Generate url: 335544324
-Cost: 78.6359
-
+>记录了151+0 的读入
+>记录了151+0 的写出
+>10809000988 bytes (11 GB, 10 GiB) copied, 27.0752 s, 399 MB/s
+>Generate url: 335544324
+>Cost: 78.6359
+>
 >Open thread num: 12
-Hash grid done
-Cost: 74.044
-
+>Hash grid done
+>Cost: 74.044
+>
 >Get ans in ans.txt
-Accept
-Cost: 24.1211
+>Accept
+>Cost: 24.1211
 
 ### 测试分析
 
