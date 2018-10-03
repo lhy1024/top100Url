@@ -280,7 +280,7 @@ namespace TopUrl {
         }
 
         close(fin);
-        std::cout << "Load done" << std::endl;
+        //std::cout << "Load done" << std::endl;
         for (int ti = 0; ti < parallelism; ti++) {
             tasks.push(std::make_tuple(-1, 0, -1));
         }
@@ -324,11 +324,11 @@ namespace TopUrl {
             }
         }
 
-        std::cout << "To hash url : " << hashUrlNum.count() << std::endl;
+        //std::cout << "To hash url : " << hashUrlNum.count() << std::endl;
 //            if(urlNum.count())
 //                assert(hashUrlNum.count() == urlNum.count());
 
-        std::cout << "done" << std::endl;
+        //std::cout << "done" << std::endl;
         //destory
         delete[]grid_buffer;
         free(grid_buffer_offset);
