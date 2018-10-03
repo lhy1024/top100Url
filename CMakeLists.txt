@@ -1,7 +1,8 @@
 cmake_minimum_required(VERSION 3.5)
 
 add_executable(topUrl
-        main.cpp)
+        src/main.cpp
+        src/murmur3/murmur3.c)
 
 target_include_directories(
         topUrl
