@@ -24,6 +24,7 @@
 #include "Node.h"
 #include "Constants.h"
 #include <map>
+#include <bits/unordered_set.h>
 
 namespace TopUrl {
     static const unsigned long long IOSIZE = 1024 * 1024 * 1024;//1G
@@ -49,7 +50,7 @@ namespace TopUrl {
 
         const int parallelism = std::thread::hardware_concurrency();
         int partitions = 256;//todo
-        const int mod[4] = {29, 31, 37, 41};
+        const int mod[4] = {57, 61, 67, 71};
 
         char **rawAns;
         unsigned long long fileSize;
@@ -75,5 +76,7 @@ namespace TopUrl {
         void streamHeap();
 
         void showRawAns();
+
+        void match();
     };
 }

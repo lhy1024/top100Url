@@ -386,14 +386,26 @@ namespace TopUrl {
             map.clear();
         }
         int fans = open("ans.txt", O_WRONLY | O_CREAT, 0644);
+        std::unordered_set<std::string> set;
         while (!heap.empty()) {
             auto node = heap.top();
             write(fans, node.key, strlen(node.key));
+            set.emplace(node.key);
             write(fans, "\n", 1);
             heap.pop();
         }
         close(fans);
-        std::cout<<"Get ans in ans.txt"<<std::endl;
+        std::cout << "Get ans in ans.txt" << std::endl;
+        for (int i = 0; i < topNum; ++i) {
+            std::string string(rawAns[i]);
+            string.pop_back();
+            set.erase(string);
+        }
+        if (set.size() == 0) {
+            std::cout << "Accept" << std::endl;
+        } else {
+            std::cout << "Wrong Answer" << std::endl;
+        }
     }
 
     void Solve::showRawAns() {
@@ -401,6 +413,7 @@ namespace TopUrl {
             std::cout << rawAns[i];
         }
     }
+
 
     int Solve::getId(char *str, int length) {
         uint32_t hash[4];                /* Output for the hash */

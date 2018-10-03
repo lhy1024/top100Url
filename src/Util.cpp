@@ -37,7 +37,7 @@ namespace TopUrl {
     }
 
     bool isDelimiter(const char &c) {
-        return !c || c == '\n' || c == ' ' || c == '\t';
+        return !c || c == '\n' || c == ' ' || c == '\t'|| c == '\r';
     }
 
 
