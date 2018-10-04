@@ -25,7 +25,7 @@
 #include "Constants.h"
 #include <map>
 #include <bits/unordered_set.h>
-
+#include <climits>
 namespace TopUrl {
     static const unsigned long long IOSIZE = 1024 * 1024 * 1024;//1G
 
@@ -47,7 +47,7 @@ namespace TopUrl {
     class Solve {
         const int URLSIZE = 32;
         const int PAGESIZE = 4096;
-
+        const int MASK = 65535;
         const int parallelism = std::thread::hardware_concurrency();
         int partitions = 1024;//todo
         const int mod[4] = {239,241,
@@ -57,7 +57,7 @@ namespace TopUrl {
         unsigned long long fileSize;
         Counter urlNum;
         int topNum;
-        int Threshold = URLSIZE;
+        int Threshold = URLSIZE * 16;
         const int grid_buffer_size = URLSIZE * 64;
         std::vector<std::string> fileNames;
 

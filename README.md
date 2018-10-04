@@ -36,7 +36,7 @@
 ## 测试
 
 ### 测试一
-
+commit 94a31114e0ffe82c058847dd6cb8ead546aba862
 #### 测试环境
 
 - i7-8700 (12 threads)
@@ -45,20 +45,20 @@
 由于硬盘限制，没有进行100g的完整测试，最高只进行了10g的测试
 
 #### 输出
->dd if=/dev/zero of=text bs=71582788 count=151
->记录了151+0 的读入
->记录了151+0 的写出
->10809000988 bytes (11 GB, 10 GiB) copied, 27.0752 s, 399 MB/s
->Generate url: 335544324
->Cost: 78.6359
->
->Open thread num: 12
->Hash grid done
->Cost: 74.044
->
->Get ans in ans.txt
->Accept
->Cost: 24.1211
+dd if=/dev/zero of=text bs=71582788 count=151
+记录了151+0 的读入
+记录了151+0 的写出
+10809000988 bytes (11 GB, 10 GiB) copied, 27.0752 s, 399 MB/s
+Generate url: 335544324
+Cost: 78.6359
+
+Open thread num: 12
+Hash grid done
+Cost: 74.044
+
+Get ans in ans.txt
+Accept
+Cost: 24.1211
 
 #### 测试分析
 
@@ -71,6 +71,7 @@
 第三步操作需要分文件读，读一次，平均速度10*1024/24.1211=424.5245MB/s
 
 ### 测试二
+commit ed8ddb13e1e546f6937751b481547b25f71b0e24
 
 测试一的预分配文件并没有带来相应的提速，反而因为预分配文件和append的冲突带来额外的开销，移除预分配的测试如下
 
@@ -84,18 +85,60 @@
 #### 输出
 
 
-> Generate url: 335544324
+Generate url: 335544324
 
-> Cost: 44.7508
+Cost: 44.7508
 
-> Open thread num: 12
+Open thread num: 12
 
-> Hash grid done
+Hash grid done
 
-> Cost: 60.9693
+Cost: 60.9693
 
-> Get ans in ans.txt
+Get ans in ans.txt
 
-> Accept
+Accept
 
-> Cost: 21.584
+Cost: 21.584
+
+
+
+### 测试三
+commit ed8ddb13e1e546f6937751b481547b25f71b0e24
+
+调整了url生成的时候的hash，让每个文件的大小接近，并且尝试了20g的测试。
+
+可以看到因为更加平均的hash，后期生成堆变成了瓶颈。
+
+#### 输出
+
+##### 10g
+Generate url: 335544324
+Cost: 59.0388
+
+Open thread num: 12
+Load done
+Hash grid done
+Write grid done
+To hash url : 335544654
+Cost: 57.1418
+
+Get ans in ans.txt
+Accept
+Cost: 62.5969
+
+##### 20g
+
+Generate url: 671088648
+Cost: 104.767
+
+Open thread num: 12
+Load done
+Hash grid done
+Write grid done
+To hash url : 671089307
+Cost: 123.099
+
+Get ans in ans.txt
+Accept
+Cost: 142.324

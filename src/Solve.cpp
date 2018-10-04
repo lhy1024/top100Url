@@ -4,6 +4,9 @@ namespace TopUrl {
 
 
     Solve::Solve(const unsigned long long &fileSize, const int &topNum) : fileSize(fileSize), topNum(topNum) {
+        assert(topNum < MASK && MASK < 1e6);
+        assert(((MASK + 1) & MASK) == 0 && MASK != -1);
+
         rawAns = new char *[topNum];
         for (int i = 0; i < topNum; ++i) {
             rawAns[i] = new char[URLSIZE];
@@ -35,12 +38,13 @@ namespace TopUrl {
         auto perFileSize = fileSize / parallelism;
         auto fileBufferSize = static_cast<unsigned long long>(
                 fileSize > IOSIZE * 0.8 / parallelism ? IOSIZE * 0.8 / parallelism : fileSize);
-        auto count = fileSize / fileBufferSize;
-        if (fileSize % fileBufferSize != 0)
-            count++;
+
         char *fileBuffer = (char *) memalign(PAGESIZE, fileBufferSize);
 
         //pre write file
+//        auto count = fileSize / fileBufferSize;
+//        if (fileSize % fileBufferSize != 0)
+//            count++;
 //        char command[4096];
 //        sprintf(command, "dd if=/dev/zero of=%s bs=%lld count=%lld", fileName.c_str(), fileBufferSize, count);
 //        std::cout << command << std::endl;
@@ -57,6 +61,7 @@ namespace TopUrl {
         //write
         std::vector<std::thread> threads;
         Signal signal;
+
         for (int ti = 0; ti < parallelism; ti++) {
             threads.emplace_back([&](int ti) {
                 lseek(fout[ti], perFileSize * ti, SEEK_SET);//todo align
@@ -68,7 +73,7 @@ namespace TopUrl {
                     while (size + localSize < perFileSize && size < fileBufferSize) {
                         //get url
                         double time = get_time();
-                        int ptr = (int((time - int(time)) * 1e6)) % (topNum);
+                        int ptr = (int((time - int(time)) * 1e6)) & MASK;
                         if (ptr >= topNum) {
                             sprintf(url, "%lfnormal\n\0", time);
                             cur = url;
@@ -280,7 +285,7 @@ namespace TopUrl {
         }
 
         close(fin);
-        //std::cout << "Load done" << std::endl;
+        std::cout << "Load done" << std::endl;
         for (int ti = 0; ti < parallelism; ti++) {
             tasks.push(std::make_tuple(-1, 0, -1));
         }
@@ -295,6 +300,7 @@ namespace TopUrl {
                 write(fout[i], grid_buffer[i], grid_buffer_offset[i]);
             }
         }
+        std::cout << "Write grid done" << std::endl;
         //write head and tail
         char htBuffer[URLSIZE];
         int tailLength, headLength;
@@ -324,7 +330,7 @@ namespace TopUrl {
             }
         }
 
-        //std::cout << "To hash url : " << hashUrlNum.count() << std::endl;
+        std::cout << "To hash url : " << hashUrlNum.count() << std::endl;
 //            if(urlNum.count())
 //                assert(hashUrlNum.count() == urlNum.count());
 
@@ -419,6 +425,6 @@ namespace TopUrl {
         uint32_t hash[4];                /* Output for the hash */
         uint32_t seed = 42;              /* Seed value for hash */
         MurmurHash3_x64_128(str, length, seed, hash);
-        return (hash[0] % mod[0] + hash[1] % mod[1] + hash[2] % mod[2] + hash[3] % mod[3]) % partitions;
+        return (hash[0] + hash[1] + hash[2] + hash[3]) % partitions;
     }
 }
