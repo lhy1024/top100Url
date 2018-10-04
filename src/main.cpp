@@ -5,7 +5,7 @@
 
 int main() {
 
-    TopUrl::Solve solve(TopUrl::IOSIZE * 10, 100);
+    TopUrl::Solve solve(TopUrl::IOSIZE * 20, 100);
 
     auto start = TopUrl::get_time();
     solve.initUrlFile("text");

@@ -49,8 +49,9 @@ namespace TopUrl {
         const int PAGESIZE = 4096;
 
         const int parallelism = std::thread::hardware_concurrency();
-        int partitions = 256;//todo
-        const int mod[4] = {57, 61, 67, 71};
+        int partitions = 1024;//todo
+        const int mod[4] = {239,241,
+                            251,257};
 
         char **rawAns;
         unsigned long long fileSize;

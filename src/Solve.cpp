@@ -41,10 +41,10 @@ namespace TopUrl {
         char *fileBuffer = (char *) memalign(PAGESIZE, fileBufferSize);
 
         //pre write file
-        char command[4096];
-        sprintf(command, "dd if=/dev/zero of=%s bs=%lld count=%lld", fileName.c_str(), fileBufferSize, count);
-        std::cout << command << std::endl;
-        system(command);
+//        char command[4096];
+//        sprintf(command, "dd if=/dev/zero of=%s bs=%lld count=%lld", fileName.c_str(), fileBufferSize, count);
+//        std::cout << command << std::endl;
+//        system(command);
 
 
         //create fout
@@ -93,7 +93,7 @@ namespace TopUrl {
             signal.inc();
         }
         signal.wait();
-        //free(fileBuffer);
+        free(fileBuffer);
         std::cout << "Generate url: " << urlNum.count() << std::endl;
     }
 
