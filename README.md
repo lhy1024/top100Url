@@ -142,3 +142,27 @@ Cost: 123.099
 Get ans in ans.txt
 Accept
 Cost: 142.324
+
+### 测试四
+
+尝试加入tcmalloc，发现速度反倒变慢;
+
+采用google的sparsemap速度近似于c++11的unordered map，采用densemap速度优化明显，而且内存开销没有想象中的大。
+
+调整了堆的策略。
+
+#### 测试数据
+
+Generate url: 335544324
+Cost: 53.1305
+
+Open thread num: 12
+Load done
+Hash grid done
+Write grid done
+To hash url : 335544588
+Cost: 66.9775
+
+Get ans in ans.txt
+Accept
+Cost: 48.7276
