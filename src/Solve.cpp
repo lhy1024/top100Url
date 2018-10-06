@@ -1,7 +1,25 @@
 #include "Solve.h"
+#include "google/sparsehash/dense_hash_map"
+#include "google/sparsehash/sparse_hash_map"
+
+
+struct cmp {
+    bool operator()(const char *s1, const char *s2) const {
+        return (s1 == s2) || (s1 && s2 && strcmp(s1, s2) == 0);
+    }
+};
+
+struct hash_func {
+    uint32_t seed = 131;              /* Seed value for hash */
+    size_t operator()(const char *str) const {
+        uint32_t hash[4];
+        MurmurHash3_x64_128(str, strlen(str), seed, hash);
+        return (hash[0] + hash[1] + hash[2] + hash[3]) / 4;
+    }
+};
+
 
 namespace TopUrl {
-
 
     Solve::Solve(const unsigned long long &fileSize, const int &topNum) : fileSize(fileSize), topNum(topNum) {
         assert(topNum < MASK && MASK < 1e6);
@@ -10,6 +28,7 @@ namespace TopUrl {
         rawAns = new char *[topNum];
         for (int i = 0; i < topNum; ++i) {
             rawAns[i] = new char[URLSIZE];
+            memset(rawAns[i], 0, URLSIZE);
         }
     }
 
@@ -105,8 +124,8 @@ namespace TopUrl {
 
     void Solve::streamHash(const std::string &input, const std::string &temp) {
         auto perThreadSize = IOSIZE / parallelism;
-        auto readBufferSize = perThreadSize / 4;
-        auto writeBufferSize = perThreadSize / 4;
+        auto readBufferSize = perThreadSize * 5 / 16;
+        auto writeBufferSize = perThreadSize * 5 / 16;
 
         //init
         char **buffers = new char *[parallelism * 2];
@@ -116,7 +135,6 @@ namespace TopUrl {
             occupied[i] = false;
         }
         Queue<std::tuple<int, unsigned long long, int>> tasks(static_cast<const size_t>(parallelism));
-
 
         int *fout = new int[partitions];
         auto *mutexes = new std::mutex[partitions];
@@ -145,7 +163,7 @@ namespace TopUrl {
 
 
         int tag = 0;
-        const auto count = 65536;//((fileSize / readBufferSize) << 1) + 16;
+        const auto count = fileSize / readBufferSize * 2 + 16;
         std::vector<Node> head(count, URLSIZE);
         std::vector<Node> tail(count, URLSIZE);
 
@@ -266,18 +284,17 @@ namespace TopUrl {
         if (fin == -1) printf("%s\n", strerror(errno));
         assert(fin != -1);
         int cursor = 0;
-        long total_bytes = file_size(input);
-        long read_bytes = 0;
+        totalBytes = file_size(input);
 
+        unsigned long long readBytes = 0;
         while (true) {
             long bytes = read(fin, buffers[cursor], readBufferSize);
             assert(bytes != -1);
             if (bytes == 0) break;
             occupied[cursor] = true;
             tasks.push(std::make_tuple(cursor, bytes, tag));
-            read_bytes += bytes;
-            printf("progress: %.2f%%\r", 100. * read_bytes / total_bytes);
-            fflush(stdout);
+            readBytes += bytes;
+            log::log(readBytes, totalBytes);
             while (occupied[cursor]) {
                 cursor = (cursor + 1) % (parallelism * 2);
             }
@@ -353,64 +370,85 @@ namespace TopUrl {
 
     void Solve::streamHeap() {
         auto bufferLength = IOSIZE / 5 * 2 / URLSIZE * URLSIZE;
-        char *buffer = new char[bufferLength];
-        auto cmpMap = [](char const *a, char const *b) {
-            return std::strcmp(a, b) < 0;
+        char *buffer = (char *) memalign(PAGESIZE, bufferLength);
+        auto cmpHeap = [](const std::shared_ptr<HeapNode> a, const std::shared_ptr<HeapNode> b) {
+            return a->num > b->num;
         };
-        auto cmpHeap = [](const HeapNode &a, const HeapNode &b) {
-            return a.num > b.num;
-        };
-        std::priority_queue<HeapNode, std::vector<HeapNode>, decltype(cmpHeap)> heap(cmpHeap);
-        std::map<const char *, int, decltype(cmpMap)> map(cmpMap);//stack safe?
+        std::priority_queue<std::shared_ptr<HeapNode>, std::vector<std::shared_ptr<HeapNode>>, decltype(cmpHeap)> heap(
+                cmpHeap);
 
+        google::dense_hash_map<const char *, int, hash_func, cmp> map;
+        map.set_empty_key(nullptr);
+
+        unsigned long long readBytes = 0;
         for (const auto &fileName:fileNames) {
-
-
             int fin = open(fileName.c_str(), O_RDONLY);
             if (fin == -1) printf("%s\n", strerror(errno));
             assert(fin != -1);
 
-            while (true) {
-                auto fileSize = file_size(fileName.c_str());
-                assert(fileSize < bufferLength);
-                long bytes = read(fin, buffer, fileSize);
-                assert(bytes != -1);
-                if (bytes == 0) break;
-                unsigned long long readBytes = 0;
-                while (readBytes < fileSize) {
-                    const char *key = buffer + readBytes;
-                    map[key]++;
-                    readBytes += URLSIZE;
-                }
+            auto fileSize = file_size(fileName.c_str());
+            assert(fileSize < bufferLength);
+
+            long bytes = read(fin, buffer, fileSize);
+            assert(bytes != -1 && bytes != 0);
+
+            unsigned long long num = fileSize / URLSIZE;//has aligned
+            for (unsigned long long i = 0; i < num; ++i) {
+                const char *key = buffer + i * URLSIZE;
+                map[key]++;
             }
+
+            readBytes += fileSize;
+            log::log(readBytes, totalBytes);
+
             for (const auto &item : map) {
-                heap.push(HeapNode(item.first, item.second, URLSIZE));
-                while (heap.size() > topNum) {
-                    heap.pop();
+                if (heap.size() < topNum) {
+                    heap.push(std::make_shared<HeapNode>(item.first, item.second, URLSIZE));
+                } else {
+                    if (item.second > heap.top()->num) {
+                        heap.push(std::make_shared<HeapNode>(item.first, item.second, URLSIZE));
+                    }
+                    while (heap.size() > topNum) {
+                        heap.pop();
+                    }
                 }
             }
             map.clear();
         }
+
+        //save ans
         int fans = open("ans.txt", O_WRONLY | O_CREAT, 0644);
         std::unordered_set<std::string> set;
         while (!heap.empty()) {
             auto node = heap.top();
-            write(fans, node.key, strlen(node.key));
-            set.emplace(node.key);
+            write(fans, node->key, strlen(node->key));
+            set.emplace(node->key);
             write(fans, "\n", 1);
             heap.pop();
         }
         close(fans);
         std::cout << "Get ans in ans.txt" << std::endl;
-        for (int i = 0; i < topNum; ++i) {
-            std::string string(rawAns[i]);
-            string.pop_back();
-            set.erase(string);
-        }
-        if (set.size() == 0) {
-            std::cout << "Accept" << std::endl;
+
+        //match ans
+        if (rawAns[0][0]) {
+            for (int i = 0; i < topNum; ++i) {
+                std::string string(rawAns[i]);
+                string.pop_back();
+                set.erase(string);
+            }
+            if (set.size() == 0) {
+                std::cout << "Accept" << std::endl;
+            } else {
+                std::cout << "Wrong Answer" << std::endl;
+            }
         } else {
-            std::cout << "Wrong Answer" << std::endl;
+            for (const auto &str:set) {
+                if (str.find("ans") == str.npos) {
+                    std::cout << "Wrong Answer" << std::endl;
+                    return;
+                }
+            }
+            std::cout << "Accept" << std::endl;
         }
     }
 

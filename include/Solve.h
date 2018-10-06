@@ -40,7 +40,7 @@ namespace TopUrl {
         }
 
         ~HeapNode() {
-            //delete[] key;//vector delete
+            delete[] key;
         }
     };
 
@@ -50,9 +50,7 @@ namespace TopUrl {
         const int MASK = 65535;
         const int parallelism = std::thread::hardware_concurrency();
         int partitions = 1024;//todo
-        const int mod[4] = {239,241,
-                            251,257};
-
+        unsigned long long totalBytes;;
         char **rawAns;
         unsigned long long fileSize;
         Counter urlNum;

@@ -21,5 +21,7 @@ namespace TopUrl {
 
     bool isDelimiter(const char &c);
 
-
+    namespace log {
+        void log(unsigned long long cur, unsigned long long total);
+    }
 }
