@@ -178,7 +178,7 @@ Cost: 48.7276
 
 
 
-将streamheap修改为类似前面两个的双缓冲区，有一定成效。
+将streamheap修改为类似前面两个的双缓冲区，有一定成效。尝试移除了忙等待，改为信号量，并没有明显改善。
 
 #### 测试数据
 
@@ -198,4 +198,3 @@ Start stream to heap
 Get ans in ans.txt
 Accept
 Cost: 34.2047
-

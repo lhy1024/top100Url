@@ -166,12 +166,16 @@ namespace TopUrl {
 
         //init
         char **buffers = new char *[parallelism * 2];
-        bool *occupied = new bool[parallelism * 2];
         for (int i = 0; i < parallelism * 2; i++) {
             buffers[i] = (char *) memalign(PAGESIZE, static_cast<size_t>(readBufferSize));//todo align
-            occupied[i] = false;
         }
         Queue<std::tuple<int, unsigned long long, int>> tasks(static_cast<const size_t>(parallelism));
+
+        std::condition_variable cv;
+        std::mutex cv_m;
+        Queue<int> occupiedQueue(static_cast<const size_t>(parallelism * 2));
+        for (int i = 0; i < parallelism * 2; ++i)
+            occupiedQueue.push(i);
 
         int *fout = new int[partitions];
         auto *mutexes = new std::mutex[partitions];
@@ -281,7 +285,11 @@ namespace TopUrl {
                         }
                         start = local_grid_offset[i];
                     }
-                    occupied[cursor] = false;
+                    {
+                        std::lock_guard<std::mutex> lk(cv_m);
+                        occupiedQueue.push(cursor);
+                    }
+                    cv.notify_all();
                 }
                 free(local_buffer);
                 free(local_grid_cursor);
@@ -299,16 +307,16 @@ namespace TopUrl {
 
         unsigned long long readBytes = 0;
         while (true) {
+            std::unique_lock<std::mutex> lk(cv_m);
+            cv.wait(lk, [&] { return !occupiedQueue.is_empty(); });
+            cursor = occupiedQueue.pop();
+
             long bytes = read(fin, buffers[cursor], readBufferSize);
             assert(bytes != -1);
             if (bytes == 0) break;
-            occupied[cursor] = true;
             tasks.push(std::make_tuple(cursor, bytes, tag));
             readBytes += bytes;
             log::log(readBytes, totalBytes);
-            while (occupied[cursor]) {
-                cursor = (cursor + 1) % (parallelism * 2);
-            }
             tag++;
         }
         close(fin);
@@ -380,21 +388,25 @@ namespace TopUrl {
             delete[]buffers[i];
         }
         delete[]buffers;
-        delete[]occupied;
     }
 
     void Solve::streamHeap(const std::string &temp, const std::string &output) {
-        auto bufferLength = IOSIZE * 3 / 8 / URLSIZE * URLSIZE;//320M/389M
+        int bufferNum = 2;
+        auto bufferLength = IOSIZE * 3 / 4 / URLSIZE * URLSIZE / bufferNum;//320M/389M
         assert(bufferLength > fileSize / partitions);
 
-        char **buffers = new char *[2];
-        bool *occupied = new bool[2];
-        for (int i = 0; i < 2; i++) {
-            buffers[i] = (char *) memalign(PAGESIZE, static_cast<size_t>(bufferLength));
-            occupied[i] = false;
-        }
-        Queue<std::tuple<int, unsigned long long>> tasks(static_cast<const size_t>(parallelism));
 
+        char **buffers = new char *[bufferNum];
+        for (int i = 0; i < bufferNum; i++) {
+            buffers[i] = (char *) memalign(PAGESIZE, static_cast<size_t>(bufferLength));
+        }
+        Queue<std::tuple<int, unsigned long long>> tasks(static_cast<const size_t>(bufferNum));
+
+        std::condition_variable cv;
+        std::mutex cv_m;
+        Queue<int> occupiedQueue(static_cast<const size_t>(bufferNum));
+        for (int i = 0; i < bufferNum; ++i)
+            occupiedQueue.push(i);
 
         auto cmpHeap = [](const std::shared_ptr<HeapNode> a, const std::shared_ptr<HeapNode> b) {
             return a->num > b->num;
@@ -430,7 +442,11 @@ namespace TopUrl {
                     }
                 }
                 map.clear();
-                occupied[cursor] = false;
+                {
+                    std::lock_guard<std::mutex> lk(cv_m);
+                    occupiedQueue.push(cursor);
+                }
+                cv.notify_all();
             }
         });
 
@@ -439,21 +455,21 @@ namespace TopUrl {
         unsigned long long finSize = 0;
         if (totalBytes == 0)
             totalBytes = fileSize;
+
         for (int i = 0; i < partitions; i++) {
+            std::unique_lock<std::mutex> lk(cv_m);
+            cv.wait(lk, [&] { return !occupiedQueue.is_empty(); });
+            cursor = occupiedQueue.pop();
+
             std::tie(fin, finSize) = getTempFile(temp, i, 'r');
             long bytes = read(fin, buffers[cursor], finSize);
             assert(bytes != -1);//no need bytes != 0
             if (!bytes)
                 continue;
-
             unsigned long long num = finSize / URLSIZE;//has aligned
-            occupied[cursor] = true;
             tasks.push(std::make_tuple(cursor, num));
             readBytes += finSize;
             log::log(readBytes, totalBytes);
-            while (occupied[cursor]) {
-                cursor = (cursor + 1) % (2);
-            }
         }
         tasks.push(std::make_tuple(-1, 0));
         thread.join();
