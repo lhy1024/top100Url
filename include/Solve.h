@@ -26,6 +26,7 @@
 #include <map>
 #include <bits/unordered_set.h>
 #include <climits>
+
 namespace TopUrl {
     static const unsigned long long IOSIZE = 1024 * 1024 * 1024;//1G
 
@@ -48,16 +49,15 @@ namespace TopUrl {
         const int URLSIZE = 32;
         const int PAGESIZE = 4096;
         const int MASK = 65535;
-        const int parallelism = std::thread::hardware_concurrency();
+        const int parallelism =  std::thread::hardware_concurrency();
         int partitions = 1024;//todo
-        unsigned long long totalBytes;;
-        char **rawAns;
-        unsigned long long fileSize;
+        unsigned long long totalBytes = 0;
+        char **rawAns = nullptr;
+        unsigned long long fileSize = 0;
         Counter urlNum;
-        int topNum;
+        int topNum = 0;
         int Threshold = URLSIZE * 16;
         const int grid_buffer_size = URLSIZE * 64;
-        std::vector<std::string> fileNames;
 
         int getId(char *str, int length);
 
@@ -72,7 +72,12 @@ namespace TopUrl {
 
         void streamHash(const std::string &input, const std::string &temp);
 
-        void streamHeap();
+        void streamHeap(const std::string &temp, const std::string &output);
+
+    private:
+        std::tuple<int, unsigned long long> getTempFile(const std::string &temp, int i, char mode);
+
+        void streamUrl(const char *buffer, unsigned long long &pos, int &urlLength, const unsigned long long &bytes);
 
         void showRawAns();
 

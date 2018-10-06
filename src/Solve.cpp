@@ -39,6 +39,43 @@ namespace TopUrl {
         delete[]rawAns;
     }
 
+    std::tuple<int, unsigned long long> Solve::getTempFile(const std::string &temp, int i, char mode) {
+        //mode 0:read 1:write
+
+        std::ostringstream oss;
+        oss << temp.c_str() << "/" << i;
+        const char *fileName = oss.str().c_str();
+
+        int file = -1;
+        if (mode == 'w') {
+            file = open(fileName, O_WRONLY | O_APPEND | O_CREAT, 0644);
+        } else if (mode == 'r') {
+            file = open(fileName, O_RDONLY);
+        }
+        assert(file != -1);
+
+        auto fileSize = file_size(fileName);
+        return std::make_tuple(file, fileSize);
+    }
+
+    void
+    Solve::streamUrl(const char *buffer, unsigned long long &pos, int &urlLength, const unsigned long long &bytes) {
+        urlLength = 0;
+        //filter
+        while (TopUrl::isDelimiter(buffer[pos])) {
+            pos++;
+            if (pos == bytes) {
+                return;
+            }
+        }
+
+        while (urlLength + pos < bytes && !TopUrl::isDelimiter(buffer[urlLength + pos])) {
+            ++urlLength;
+        }
+        if (urlLength + pos < bytes)
+            urlLength += 1;// keep delimiter
+    };
+
     void Solve::initUrlFile(const std::string &fileName, bool toReInit) {
         //create ans
         char post[] = "ans";
@@ -144,14 +181,11 @@ namespace TopUrl {
         }
         create_directory(temp);
 
+        unsigned long long foutSize;
         for (int i = 0; i < partitions; i++) {
-            std::ostringstream oss;
-            oss << temp.c_str() << "/" << i;
-            fileNames.push_back(oss.str());
-            fout[i] = open(fileNames[i].c_str(), O_WRONLY | O_APPEND | O_CREAT, 0644);
-            assert(fout[i] != -1);
+            std::tie(fout[i], foutSize) = getTempFile(temp, i, 'w');
+            assert(foutSize == 0);
         }
-
 
         char *global_grid_buffer = (char *) memalign(PAGESIZE, grid_buffer_size * partitions);
         char **grid_buffer = new char *[partitions];
@@ -163,10 +197,9 @@ namespace TopUrl {
 
 
         int tag = 0;
-        const auto count = fileSize / readBufferSize * 2 + 16;
+        const auto count = fileSize / readBufferSize + 16;
         std::vector<Node> head(count, URLSIZE);
         std::vector<Node> tail(count, URLSIZE);
-
         //init threads
         Counter hashUrlNum;
         std::vector<std::thread> threads;
@@ -187,41 +220,21 @@ namespace TopUrl {
                     memset(local_grid_offset, 0, sizeof(int) * partitions);
                     memset(local_grid_cursor, 0, sizeof(int) * partitions);
                     char *buffer = buffers[cursor];
-                    int urlLength;
-                    bool isTail;
-
-
-                    auto streamUrl = [&]() {
-                        isTail = false;
-                        urlLength = 0;
-                        //filter
-
-                        while (isDelimiter(buffer[pos])) {
-                            pos++;
-                            if (pos == bytes) {
-                                return;
-                            }
-                        }
-
-                        while (!isDelimiter(buffer[urlLength + pos])) {
-                            ++urlLength;
-                            if (urlLength + pos == bytes) {
-                                isTail = true;
-                                return;
-                            }
-                        }
-                    };
 
                     // read buffer
+                    int urlLength;
                     for (pos = 0; pos < bytes; pos += urlLength) {
-                        streamUrl();
-                        if (urlLength) {
-                            int id = getId(buffer + pos, urlLength);
-                            if (pos != 0 && !isTail)//not head or tail
+                        if (tag != 0 && pos == 0) {//isHead
+                            streamUrl(buffer, pos, urlLength, bytes);
+                        } else {
+                            streamUrl(buffer, pos, urlLength, bytes);
+                            if (pos + urlLength == bytes || urlLength == 0) {//isTail
+                                continue;
+                            } else {
+                                int id = getId(buffer + pos, urlLength);
                                 local_grid_offset[id] += URLSIZE;//align
-
-                            hashUrlNum.inc();
-                            //std::cout << hashUrlNum.count() << " : " << buffer + pos << std::endl;
+                                hashUrlNum.inc();
+                            }
                         }
                     }
                     // get offset
@@ -232,23 +245,20 @@ namespace TopUrl {
                     }
 
                     // write ram by offset
-                    bool isHead = true;
                     for (pos = 0; pos < bytes; pos += urlLength) {
-                        streamUrl();
-                        if (isHead && buffer) {//no zero
-                            //std::cout << tag << "/" << count << std::endl;
-                            memcpy(head[tag].content, buffer + pos, urlLength);
-                            head[tag].size = urlLength;
-                            isHead = false;
-                        }
-                        if (isTail) {
-                            memcpy(tail[tag].content, buffer + pos, urlLength);
-                            tail[tag].size = urlLength;
-                        } else if (urlLength) {
-                            int id = getId(buffer + pos, urlLength);
-                            memcpy(local_buffer + local_grid_cursor[id], buffer + pos, URLSIZE);
-                            memset(local_buffer + local_grid_cursor[id] + urlLength, 0, URLSIZE - urlLength);//align
-                            local_grid_cursor[id] += URLSIZE;
+                        if (tag != 0 && pos == 0) {//isHead
+                            streamUrl(buffer, pos, urlLength, bytes);
+                            head[tag].init(buffer + pos, urlLength);
+                        } else {
+                            streamUrl(buffer, pos, urlLength, bytes);
+                            if (pos + urlLength == bytes || urlLength == 0) {//isTail
+                                tail[tag].init(buffer + pos, urlLength);
+                            } else {
+                                int id = getId(buffer + pos, urlLength);
+                                memcpy(local_buffer + local_grid_cursor[id], buffer + pos, urlLength);
+                                memset(local_buffer + local_grid_cursor[id] + urlLength, 0, URLSIZE - urlLength);//align
+                                local_grid_cursor[id] += URLSIZE;
+                            }
                         }
                     }
                     //write file
@@ -278,8 +288,9 @@ namespace TopUrl {
                 free(local_grid_offset);
             });
         }
-
         std::cout << "Open thread num: " << threads.size() << std::endl;
+
+        //start write fin
         int fin = open(input.c_str(), O_RDONLY);
         if (fin == -1) printf("%s\n", strerror(errno));
         assert(fin != -1);
@@ -300,13 +311,13 @@ namespace TopUrl {
             }
             tag++;
         }
-
         close(fin);
         std::cout << "Load done" << std::endl;
+
+        //wait threads
         for (int ti = 0; ti < parallelism; ti++) {
             tasks.push(std::make_tuple(-1, 0, -1));
         }
-
         for (int ti = 0; ti < parallelism; ti++) {
             threads[ti].join();
         }
@@ -318,40 +329,44 @@ namespace TopUrl {
             }
         }
         std::cout << "Write grid done" << std::endl;
+
         //write head and tail
         char htBuffer[URLSIZE];
-        int tailLength, headLength;
-        for (int i = 0; i < count - 1; ++i) {
+        int tailLength, headLength, length;
 
+        auto writeHeadOrTail = [&](const Node &node) {
+            memcpy(htBuffer, node.content, node.size);
+            memset(htBuffer + node.size, 0, URLSIZE - node.size);
+            int id = getId(htBuffer, node.size);
+            write(fout[id], htBuffer, URLSIZE);
+            hashUrlNum.inc();
+        };
+
+        for (int i = 0; i < count - 1; ++i) {
             tailLength = tail[i].size;
             headLength = head[i + 1].size;
-
-            if (tailLength || headLength) {
-                if (tailLength + headLength > URLSIZE) {
+            length = headLength + tailLength;
+            if (length > URLSIZE || (tailLength && isDelimiter(tail[i].content[tailLength - 1]))) {
+                writeHeadOrTail(tail[i]);
+                writeHeadOrTail(head[i + 1]);
+            }else {
+                if (tailLength)
                     memcpy(htBuffer, tail[i].content, tailLength);
-                    memset(htBuffer + tailLength, 0, URLSIZE - tailLength);
-                    int id = getId(htBuffer, tailLength);
+                if (headLength)
+                    memcpy(htBuffer + tailLength, head[i + 1].content, headLength);
+                if (length) {
+                    memset(htBuffer + length, 0, URLSIZE - length);
+                    int id = getId(htBuffer, length);
                     write(fout[id], htBuffer, URLSIZE);
-
-                    memcpy(htBuffer, head[i + 1].content, headLength);
-                    memset(htBuffer + headLength, 0, URLSIZE - headLength);
-                    id = getId(htBuffer, headLength);
-                    write(fout[id], htBuffer, URLSIZE);
-                } else {
-                    memcpy(htBuffer, tail[i].content, tailLength);
-                    memcpy(htBuffer + tail[i].size, head[i + 1].content, headLength);
-                    memset(htBuffer + headLength + tailLength, 0, URLSIZE - headLength - tailLength);
-                    int id = getId(htBuffer, headLength + tailLength);
-                    write(fout[id], htBuffer, URLSIZE);
+                    hashUrlNum.inc();
                 }
             }
         }
 
         std::cout << "To hash url : " << hashUrlNum.count() << std::endl;
-//            if(urlNum.count())
-//                assert(hashUrlNum.count() == urlNum.count());
+        if(urlNum.count())
+            assert(hashUrlNum.count() == urlNum.count());
 
-        //std::cout << "done" << std::endl;
         //destory
         delete[]grid_buffer;
         free(grid_buffer_offset);
@@ -368,7 +383,7 @@ namespace TopUrl {
         delete[]occupied;
     }
 
-    void Solve::streamHeap() {
+    void Solve::streamHeap(const std::string &temp, const std::string &output) {
         auto bufferLength = IOSIZE / 5 * 2 / URLSIZE * URLSIZE;
         char *buffer = (char *) memalign(PAGESIZE, bufferLength);
         auto cmpHeap = [](const std::shared_ptr<HeapNode> a, const std::shared_ptr<HeapNode> b) {
@@ -380,25 +395,24 @@ namespace TopUrl {
         google::dense_hash_map<const char *, int, hash_func, cmp> map;
         map.set_empty_key(nullptr);
 
+        int fin;
         unsigned long long readBytes = 0;
-        for (const auto &fileName:fileNames) {
-            int fin = open(fileName.c_str(), O_RDONLY);
-            if (fin == -1) printf("%s\n", strerror(errno));
-            assert(fin != -1);
-
-            auto fileSize = file_size(fileName.c_str());
-            assert(fileSize < bufferLength);
-
-            long bytes = read(fin, buffer, fileSize);
-            assert(bytes != -1 && bytes != 0);
-
-            unsigned long long num = fileSize / URLSIZE;//has aligned
+        unsigned long long finSize = 0;
+        if (totalBytes == 0)
+            totalBytes = fileSize;
+        for (int i = 0; i < partitions; i++) {
+            std::tie(fin, finSize) = getTempFile(temp, i, 'r');
+            long bytes = read(fin, buffer, finSize);
+            assert(bytes != -1);//no need bytes != 0
+            if (!bytes)
+                continue;
+            unsigned long long num = finSize / URLSIZE;//has aligned
             for (unsigned long long i = 0; i < num; ++i) {
                 const char *key = buffer + i * URLSIZE;
                 map[key]++;
             }
 
-            readBytes += fileSize;
+            readBytes += finSize;
             log::log(readBytes, totalBytes);
 
             for (const auto &item : map) {
@@ -417,23 +431,19 @@ namespace TopUrl {
         }
 
         //save ans
-        int fans = open("ans.txt", O_WRONLY | O_CREAT, 0644);
+        int fans = open(output.c_str(), O_WRONLY | O_CREAT, 0644);
         std::unordered_set<std::string> set;
-        while (!heap.empty()) {
-            auto node = heap.top();
+        for (auto node = heap.top(); !heap.empty(); heap.pop()) {
             write(fans, node->key, strlen(node->key));
             set.emplace(node->key);
-            write(fans, "\n", 1);
-            heap.pop();
         }
         close(fans);
-        std::cout << "Get ans in ans.txt" << std::endl;
+        std::cout << "Get ans in " << output << std::endl;
 
         //match ans
         if (rawAns[0][0]) {
             for (int i = 0; i < topNum; ++i) {
                 std::string string(rawAns[i]);
-                string.pop_back();
                 set.erase(string);
             }
             if (set.size() == 0) {
