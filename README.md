@@ -173,3 +173,29 @@ Cost: 66.9775
 Get ans in ans.txt
 Accept
 Cost: 48.7276
+
+### 测试五
+
+
+
+将streamheap修改为类似前面两个的双缓冲区，有一定成效。
+
+#### 测试数据
+
+Start init url file
+Generate url: 335544324
+Cost: 52.1674
+
+Start stream to hash
+Open thread num: 12
+Load done
+Hash grid done
+Write grid done
+To hash url : 335544324
+Cost: 64.4286
+
+Start stream to heap
+Get ans in ans.txt
+Accept
+Cost: 34.2047
+

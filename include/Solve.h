@@ -50,7 +50,7 @@ namespace TopUrl {
         const int PAGESIZE = 4096;
         const int MASK = 65535;
         const int parallelism =  std::thread::hardware_concurrency();
-        int partitions = 1024;//todo
+        int partitions = 32;//todo
         unsigned long long totalBytes = 0;
         char **rawAns = nullptr;
         unsigned long long fileSize = 0;

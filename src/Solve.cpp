@@ -349,7 +349,7 @@ namespace TopUrl {
             if (length > URLSIZE || (tailLength && isDelimiter(tail[i].content[tailLength - 1]))) {
                 writeHeadOrTail(tail[i]);
                 writeHeadOrTail(head[i + 1]);
-            }else {
+            } else {
                 if (tailLength)
                     memcpy(htBuffer, tail[i].content, tailLength);
                 if (headLength)
@@ -364,7 +364,7 @@ namespace TopUrl {
         }
 
         std::cout << "To hash url : " << hashUrlNum.count() << std::endl;
-        if(urlNum.count())
+        if (urlNum.count())
             assert(hashUrlNum.count() == urlNum.count());
 
         //destory
@@ -384,8 +384,18 @@ namespace TopUrl {
     }
 
     void Solve::streamHeap(const std::string &temp, const std::string &output) {
-        auto bufferLength = IOSIZE / 5 * 2 / URLSIZE * URLSIZE;
-        char *buffer = (char *) memalign(PAGESIZE, bufferLength);
+        auto bufferLength = IOSIZE * 3 / 8 / URLSIZE * URLSIZE;//320M/389M
+        assert(bufferLength > fileSize / partitions);
+
+        char **buffers = new char *[2];
+        bool *occupied = new bool[2];
+        for (int i = 0; i < 2; i++) {
+            buffers[i] = (char *) memalign(PAGESIZE, static_cast<size_t>(bufferLength));
+            occupied[i] = false;
+        }
+        Queue<std::tuple<int, unsigned long long>> tasks(static_cast<const size_t>(parallelism));
+
+
         auto cmpHeap = [](const std::shared_ptr<HeapNode> a, const std::shared_ptr<HeapNode> b) {
             return a->num > b->num;
         };
@@ -395,41 +405,58 @@ namespace TopUrl {
         google::dense_hash_map<const char *, int, hash_func, cmp> map;
         map.set_empty_key(nullptr);
 
-        int fin;
+        std::thread thread([&]() {
+            while (true) {
+                int cursor;
+                unsigned long long num;
+                std::tie(cursor, num) = tasks.pop();
+                if (cursor == -1)
+                    break;
+
+                for (unsigned long long i = 0; i < num; ++i) {
+                    const char *key = buffers[cursor] + i * URLSIZE;
+                    map[key]++;
+                }
+                for (const auto &item : map) {
+                    if (heap.size() < topNum) {
+                        heap.push(std::make_shared<HeapNode>(item.first, item.second, URLSIZE));
+                    } else {
+                        if (item.second > heap.top()->num) {
+                            heap.push(std::make_shared<HeapNode>(item.first, item.second, URLSIZE));
+                        }
+                        while (heap.size() > topNum) {
+                            heap.pop();
+                        }
+                    }
+                }
+                map.clear();
+                occupied[cursor] = false;
+            }
+        });
+
+        int fin, cursor = 0;
         unsigned long long readBytes = 0;
         unsigned long long finSize = 0;
         if (totalBytes == 0)
             totalBytes = fileSize;
         for (int i = 0; i < partitions; i++) {
             std::tie(fin, finSize) = getTempFile(temp, i, 'r');
-            long bytes = read(fin, buffer, finSize);
+            long bytes = read(fin, buffers[cursor], finSize);
             assert(bytes != -1);//no need bytes != 0
             if (!bytes)
                 continue;
-            unsigned long long num = finSize / URLSIZE;//has aligned
-            for (unsigned long long i = 0; i < num; ++i) {
-                const char *key = buffer + i * URLSIZE;
-                map[key]++;
-            }
 
+            unsigned long long num = finSize / URLSIZE;//has aligned
+            occupied[cursor] = true;
+            tasks.push(std::make_tuple(cursor, num));
             readBytes += finSize;
             log::log(readBytes, totalBytes);
-
-            for (const auto &item : map) {
-                if (heap.size() < topNum) {
-                    heap.push(std::make_shared<HeapNode>(item.first, item.second, URLSIZE));
-                } else {
-                    if (item.second > heap.top()->num) {
-                        heap.push(std::make_shared<HeapNode>(item.first, item.second, URLSIZE));
-                    }
-                    while (heap.size() > topNum) {
-                        heap.pop();
-                    }
-                }
+            while (occupied[cursor]) {
+                cursor = (cursor + 1) % (2);
             }
-            map.clear();
         }
-
+        tasks.push(std::make_tuple(-1, 0));
+        thread.join();
         //save ans
         int fans = open(output.c_str(), O_WRONLY | O_CREAT, 0644);
         std::unordered_set<std::string> set;
