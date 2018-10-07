@@ -176,7 +176,7 @@ Cost: 48.7276
 
 ### 测试五
 
-
+>  commit 2f52306ce2391041a01de94a832e0fa869dd8f76
 
 将streamheap修改为类似前面两个的双缓冲区，有一定成效。尝试移除了忙等待，改为信号量，并没有明显改善。
 
@@ -198,3 +198,34 @@ Start stream to heap
 Get ans in ans.txt
 Accept
 Cost: 34.2047
+
+
+
+### 测试六
+
+找了一块2t的希捷机械用来测试100g规模的数据。可以看到，第一步因为是向连续大文件去写，所以和用固态硬盘的速度基本没差距，说明瓶颈在处理器。第二步和第三步，因为涉及到对多个文件的读写，磁盘寻道带来了额外的开销，有必要为机械硬盘的采取，将第二步的文件移动成一个大文件再处理的版本。
+
+```
+./topUrl -i text -o ans.txt -t temp -n 100  -m 7 -p 300
+```
+
+#### 100g
+
+Start init url file
+Generate url: 3355443204
+Cost: 639.205
+
+Start stream to hash
+Open thread num: 12
+Load done 100.00% 
+Hash grid done
+Write grid done
+To hash url : 3355443204
+Cost: 1688.54
+
+Start stream to heap
+Get ans in ans.txt
+Accept
+Cost: 714.784
+
+Max memory : 964 MB

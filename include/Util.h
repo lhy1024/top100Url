@@ -23,5 +23,7 @@ namespace TopUrl {
 
     namespace log {
         void log(unsigned long long cur, unsigned long long total);
+
+        void logMaxMemory();
     }
 }

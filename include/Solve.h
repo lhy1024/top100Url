@@ -46,25 +46,20 @@ namespace TopUrl {
     };
 
     class Solve {
-        const int URLSIZE = 32;
-        const int PAGESIZE = 4096;
-        const int MASK = 65535;
-        const int parallelism =  std::thread::hardware_concurrency();
-        int partitions = 32;//todo
+        int partitions;
         unsigned long long totalBytes = 0;
         char **rawAns = nullptr;
         unsigned long long fileSize = 0;
         Counter urlNum;
         int topNum = 0;
-        int Threshold = URLSIZE * 16;
-        const int grid_buffer_size = URLSIZE * 64;
+
 
         int getId(char *str, int length);
 
     public:
 
 
-        Solve(const unsigned long long &fileSize, const int &topNum);
+        Solve(const unsigned long long &fileSize, const int &topNum,const int & partitions);
 
         ~Solve();
 

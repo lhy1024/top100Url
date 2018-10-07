@@ -21,10 +21,11 @@ struct hash_func {
 
 namespace TopUrl {
 
-    Solve::Solve(const unsigned long long &fileSize, const int &topNum) : fileSize(fileSize), topNum(topNum) {
+    Solve::Solve(const unsigned long long &fileSize, const int &topNum,const int & partitions) : fileSize(fileSize), topNum(topNum),partitions(partitions) {
         assert(topNum < MASK && MASK < 1e6);
         assert(((MASK + 1) & MASK) == 0 && MASK != -1);
-
+        auto bufferLength = IOSIZE * 3 / 4 / URLSIZE * URLSIZE / 2;//for stream heap
+        assert(bufferLength > fileSize / partitions);
         rawAns = new char *[topNum];
         for (int i = 0; i < topNum; ++i) {
             rawAns[i] = new char[URLSIZE];
@@ -120,7 +121,7 @@ namespace TopUrl {
 
         for (int ti = 0; ti < parallelism; ti++) {
             threads.emplace_back([&](int ti) {
-                lseek(fout[ti], perFileSize * ti, SEEK_SET);//todo align
+                lseek(fout[ti], perFileSize * ti, SEEK_SET);
                 unsigned long long localSize = 0;
                 char *url = new char[URLSIZE];
                 char *cur = nullptr;
@@ -167,7 +168,7 @@ namespace TopUrl {
         //init
         char **buffers = new char *[parallelism * 2];
         for (int i = 0; i < parallelism * 2; i++) {
-            buffers[i] = (char *) memalign(PAGESIZE, static_cast<size_t>(readBufferSize));//todo align
+            buffers[i] = (char *) memalign(PAGESIZE, static_cast<size_t>(readBufferSize));
         }
         Queue<std::tuple<int, unsigned long long, int>> tasks(static_cast<const size_t>(parallelism));
 
@@ -209,8 +210,8 @@ namespace TopUrl {
         std::vector<std::thread> threads;
         for (int ti = 0; ti < parallelism; ti++) {
             threads.emplace_back([&]() {
-                char *local_buffer = (char *) memalign(PAGESIZE, writeBufferSize);//todo
-                int *local_grid_offset = new int[partitions];//todo
+                char *local_buffer = (char *) memalign(PAGESIZE, writeBufferSize);
+                int *local_grid_offset = new int[partitions];
                 int *local_grid_cursor = new int[partitions];
 
                 while (true) {

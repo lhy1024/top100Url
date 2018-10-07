@@ -1,6 +1,6 @@
-#include "Constants.h"
 #include "sys/time.h"
 #include "cstdlib"
+#include "iostream"
 #include <sys/stat.h>
 #include <sys/types.h>
 #include "murmur3/murmur3.h"
@@ -43,8 +43,10 @@ namespace TopUrl {
         int _LINE_LENGTH = 32;
         float cpu = 0;
         size_t mem = 0;
+        size_t MaxMemory = 0;
         int pid = getpid();
         int tid = -1;
+
         //http://blog.51cto.com/ziloeng/984723
         bool GetCpuMem(float &cpu, size_t &mem, int pid, int tid = -1) {
             bool ret = false;
@@ -95,10 +97,15 @@ namespace TopUrl {
             return ret;
         }
 
-        void log(unsigned long long cur, unsigned long long total){
+        void log(unsigned long long cur, unsigned long long total) {
             GetCpuMem(cpu, mem, pid, tid);
+            MaxMemory = std::max(MaxMemory, mem);
             printf("progress: %.2f%% CPU:%.1f\tMEM:%dMB\r", 100. * cur / total, cpu, mem);
             fflush(stdout);
+        }
+
+        void logMaxMemory() {
+            std::cout << "Max memory : " << MaxMemory << " MB" << std::endl;
         }
 
     }
