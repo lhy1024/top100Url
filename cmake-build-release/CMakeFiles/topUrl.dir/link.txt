@@ -1,1 +1,0 @@
-/usr/bin/g++  -O3 -DNDEBUG   CMakeFiles/topUrl.dir/src/main.cpp.o CMakeFiles/topUrl.dir/src/murmur3/murmur3.c.o CMakeFiles/topUrl.dir/src/Util.cpp.o CMakeFiles/topUrl.dir/src/Solve.cpp.o  -o topUrl /usr/lib/libpthread.so 

@@ -38,7 +38,7 @@ int main(int argc, char **argv) {
         std::cout
                 << "usage: -i [input path] -o [output path] -n <int>[url file size/G](0~100)  -t [temp path] -a [ans path] -m <int>[mode](0-7) -p <int>[partitions]"
                 << std::endl;
-        std::cout << " -i text -o ans.txt -t temp -n 10 -m 4 " << std::endl;
+        std::cout << " -i text -o ans.txt -t temp -n 10 -m 4 -p 256" << std::endl;
         exit(-1);
     }
 
