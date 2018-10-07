@@ -1,3 +1,0 @@
-/home/lhy/CLionProjects/top100Url/cmake-build-release/CMakeFiles/rebuild_cache.dir
-/home/lhy/CLionProjects/top100Url/cmake-build-release/CMakeFiles/topUrl.dir
-/home/lhy/CLionProjects/top100Url/cmake-build-release/CMakeFiles/edit_cache.dir
